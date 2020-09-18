@@ -15,10 +15,9 @@
 #include "esp_vfs.h"
 #include "lnodeaux.h"
 #include "lflash.h"
+#include "user_version.h"
 
-// Lua: node.chipid()
-static int node_chipid( lua_State *L )
-{
+static int get_chip_id(char * dst)
   // This matches the way esptool.py generates a chipid for the ESP32 as of
   // esptool commit e9e9179f6fc3f2ecfc568987d3224b5e53a05f06
   // Oddly, this drops the lowest byte what's effectively the MAC address, so
@@ -27,8 +26,13 @@ static int node_chipid( lua_State *L )
   uint64_t word17 = REG_READ(EFUSE_BLK0_RDATA2_REG);
   const uint64_t MAX_UINT24 = 0xffffff;
   uint64_t cid = ((word17 & MAX_UINT24) << 24) | ((word16 >> 8) & MAX_UINT24);
+  sprintf(dst, "0x%llx", cid);
+
+// Lua: node.chipid()
+static int node_chipid( lua_State *L )
+{
   char chipid[17] = { 0 };
-  sprintf(chipid, "0x%llx", cid);
+  get_chip_id(chipid);
   lua_pushstring(L, chipid);
   return 1;
 }
@@ -48,6 +52,16 @@ static int node_restart (lua_State *L)
    return 0;
 }
 
+static int node_info( lua_State* L )
+{
+  lua_pushinteger(L, NODE_VERSION_MAJOR);
+  lua_pushinteger(L, NODE_VERSION_MINOR);
+  lua_pushinteger(L, NODE_VERSION_REVISION);
+  lua_pushstring(L, NODE_VERSION);
+  lua_pushstring(L, BUILD_DATE);
+  lua_pushstring(L, SDK_VERSION);
+  return 6;
+}
 
 // Lua: node.dsleep (microseconds|{opts})
 static int node_dsleep (lua_State *L)
@@ -492,6 +506,7 @@ LROT_BEGIN(node)
   LROT_FUNCENTRY( flashreload,luaN_reload_reboot )
   LROT_FUNCENTRY( flashindex, luaN_index )
   LROT_FUNCENTRY( heap,       node_heap )
+  LROT_FUNCENTRY( info,      node_info )
   LROT_FUNCENTRY( input,      node_input )
   LROT_FUNCENTRY( output,     node_output )
   LROT_FUNCENTRY( osprint,    node_osprint )
